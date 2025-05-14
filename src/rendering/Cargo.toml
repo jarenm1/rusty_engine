@@ -1,0 +1,14 @@
+[package]
+name = "rendering"
+version = "0.1.0"
+edition = "2024"
+
+[lib]
+path = "src/mod.rs"
+
+[dependencies]
+bytemuck = { version = "1.22.0", features = ["derive"] }
+jaren_ecs = { path = "../jaren_ecs" }
+wgpu = "0.20.0" # Unify version with engine crate
+winit = "0.30.9"
+image = "0.24.7"

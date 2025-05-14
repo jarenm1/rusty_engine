@@ -1,0 +1,15 @@
+[package]
+name = "jaren_ecs"
+version = "0.1.0"
+edition = "2024"
+
+[lib]
+path = "src/mod.rs"
+
+[dependencies]
+jaren_ecs_derive = { path = "../jaren_ecs_derive" }
+uuid = { version = "1.16.0", features = ["v4", "js"] } 
+serde = { version = "1.0.219", features = ["derive"], optional = true }
+
+[features]
+serde = ["dep:serde"]

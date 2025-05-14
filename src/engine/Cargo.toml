@@ -1,0 +1,42 @@
+[package]
+name = "engine"
+version = "0.1.0"
+edition = "2024"
+
+# Common dependencies needed for both native and WASM
+[dependencies]
+rendering = { path = "../rendering" }
+jaren_ecs = { path = "../jaren_ecs" }
+pollster = "0.3.0"
+log = "0.4"
+winit = "0.30.9"
+
+# WASM-specific dependencies
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+wgpu = { version = "0.20.0", features = ["webgl"] } # WebGL specific for wasm
+console_error_panic_hook = "0.1.7"
+wasm-bindgen = "0.2.100"
+console_log = "1.0"
+web-sys = { version = "0.3.77", features = [
+    "Document",
+    "Window",
+    "Element",
+    "HtmlCanvasElement",
+    "Node",      # Needed for append_child
+    "console",   # Needed for log_1
+]}
+
+# Native-specific dependencies
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+wgpu = "0.20.0" # Standard wgpu for native (matches wasm version for consistency)
+
+# Native-specific dev-dependencies (for examples/tests)
+[target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
+env_logger = "0.11" # For native example logging
+
+[lib]
+crate-type = ["rlib"] # Only build as a Rust library by default
+
+[[example]]
+name = "simple_game"
+path = "../../examples/simple_game.rs"

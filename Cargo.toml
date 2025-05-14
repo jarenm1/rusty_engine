@@ -1,0 +1,10 @@
+[workspace]
+members = [
+    "src/engine",
+    "src/jaren_ecs",
+    "src/rendering",
+]
+resolver = "2"
+
+[profile.release]
+opt-level = "z"
