@@ -1,9 +1,10 @@
 # About 
 `rusty_engine` is a simple rust game engine using winit and wgpu.
 This engine currently is not in a usable state. 
-The ecs implementation will likely be very slow, but is an archetype based implementation and is currently unfinished.
-The rendering is able to render the classic triangle and images.
 
+As I am working, I type out my thought process to help me think, I will do my best not to delete these comments and leave these in to show my thoughts when creating the engine. There are tons in the ECS code currently.
+
+Currently working on the ECS. Archetype based approach. spawn! marco to create entities, entities are the key used to query and transform components tied to the entity.
 
 ## Goal
-The goal is for `rusty_engine` to be a 2d gane engine with full sprite and animation support. The engine will be ECS driven. Similar to bevy, the engine lets you make startup and update functinos anywhere. Will also have WASM support, but not no_std.
+Will change scope based on how I feel. Currently the end goal is 2d sprite engine.
