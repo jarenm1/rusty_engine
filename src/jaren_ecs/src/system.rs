@@ -1,81 +1,55 @@
-use std::any::TypeId;
-use std::collections::HashMap;
 
-trait Component: 'static {}
 
-// Component metadata for type-erased storage
-struct ComponentMeta {
-    size: usize,
-    align: usize,
-}
+type Entity = u32;
 
-// Component Slice stores components as raw bytes.
-struct ComponentSlice {
-    data: Vec<u8>,
-    count: usize,
-}
 
-// Archetype identifier
-type ArchetypeId = u64;
+trait Component {}
 
-#[derive(Clone, Copy, PartialEq, Eq, Hash)]
-struct Entity {
-    id: u64,
-    generation: u32,
-}
+// a component is a thing that we can assign to entties. But since entities are actually just a
+// u32, that means that entities are really assignedt to components really??? components need to be
+// de coupled from engine code so users can make custom components....  so component is a trait...
+//
+// since we are assigning entities to components. The component trait needs to have 
 
-struct Archetype {
-    id: ArchetypeId,
-    components: Vec<ComponentSlice>,
-    entity_indices: Vec<usize>,
-}
 
-struct GenerationalArena {
-    entities: Vec<Option<(EntityData, u32)>>,
-    next_id: u64,
-}
+// commands.spawn() -> entity. what is commands??? commands is apart of our system
+//
+// ecs is row column based.. right. so we can imagine a table, the table has columns of components
+// and rows of entities. column-x-axis row-y-axis
+// 
+// should we make components an option on an entity? does not seem memory efficient
+//
 
-struct EntityData {
-    archetype_id: ArchetypeId,
-    index: usize,
-}
-
+#[derive(Default)]
 pub struct System {
-    component_registry: HashMap<TypeId, ComponentMeta>,
-    archetypes: HashMap<Archetype, Archetype>,
-    entity_to_archetype: HashMap<Entity, (ArchetypeId, usize)>,
-    arena: GenerationalArena,
+    next_entity: u32,
 }
 
-impl GenerationalArena {
-    fn new() -> Self {
-        Self {
-            entities: Vec::new(),
-            next_id: 0,
-        }
-    }
+// macro to handle at compile time n arguments of type impl Component. 
 
-    fn allocate(&mut self) -> Entity {
-        let id = self.next_id;
-        self.next_id += 1;
-        self.entities.push(Some((
-            EntityData {
-                archetype_id: 0,
-                index: 0,
-            },
-            0,
-        )));
-        Entity { id, generation: 0 }
-    }
-}
 
+
+// system needs to be the drivver for the ECS> has all the values for archetypes etc... its what i
+// would look at for the table... we also need a way to spawn entities based on system. so like a
+// system.spawn() ? but we could also do like a sub-type or a query index? 
+// like how does query work? So all the entites are stored in different archetypes. different
+// archetypes are composed of different components. so we could struct archetype { entities,
+// components, } or something similar ??? /
+//
 impl System {
     pub fn new() -> Self {
         Self {
-            component_registry: HashMap::new(),
-            archetypes: HashMap::new(),
-            entity_to_archetype: HashMap::new(),
-            arena: GenerationalArena::new(),
+         next_entity: 0,
         }
+    }
+}
+
+mod macros {
+    macro_rules! spawn {
+        (self:expr, $($component:expr), *) => {
+            $(
+                $self.next_entity += 1;
+            )*
+        };
     }
 }

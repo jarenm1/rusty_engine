@@ -4,6 +4,7 @@ use std::{ptr::with_exposed_provenance, sync::Arc};
 use winit::{application::ApplicationHandler, event::ElementState, event_loop::EventLoop, keyboard::Key, window::{Window, WindowAttributes}};
 use rendering::renderer::Renderer;
 use jaren_ecs::system::System;
+use web_sys::console::log_1;
 
 #[derive(Default)]
 pub struct GameConfig {
@@ -20,6 +21,8 @@ pub struct App {
     renderer: Option<Renderer>,
     config: GameConfig,
     ecs: System,
+    startup_systems: Vec<Box<dyn FnMut(&mut System)>>,
+    update_systems: Vec<Box<dyn FnMut(&mut System)>>,
 }
 
 impl App {
@@ -29,6 +32,8 @@ impl App {
             renderer: None,
             config,
             ecs: System::new(),
+            startup_systems: Vec::new(),
+            update_systems: Vec::new(),
         }
     }
     pub fn run(mut self) {
@@ -42,10 +47,13 @@ impl App {
         #[cfg(not(target_arch = "wasm32"))]
         event_loop.run_app(&mut self).expect("Failed to run event loop");
     }
-    pub fn add_system(mut self: Self, mode: FunctionMode, func: &[&dyn Fn(System) -> ()]) -> Self {
+    pub fn add_system<F>(mut self, mode: FunctionMode, func: F) -> Self
+    where
+        F: FnMut(&mut System) + 'static,
+    {
         match mode {
-            FunctionMode::Startup => {},
-            FunctionMode::Update => {},
+            FunctionMode::Startup => self.startup_systems.push(Box::new(func)),
+            FunctionMode::Update => self.update_systems.push(Box::new(func)),
         }
         self
     }
@@ -123,6 +131,10 @@ impl ApplicationHandler for App {
                 log_1(&"resumed: Renderer initialized and configured".into()); // Update log
             }
         }
+        // Run all startup systems after ECS and renderer are ready
+        for system in &mut self.startup_systems {
+            (system)(&mut self.ecs);
+        }
     }
     fn window_event(
             &mut self,
@@ -145,7 +157,10 @@ impl ApplicationHandler for App {
                      renderer.resize(physical_size);
                 }
                 winit::event::WindowEvent::RedrawRequested => {
-                    // pass delta time to game update
+                    // Run all update systems per frame
+                    for system in &mut self.update_systems {
+                        (system)(&mut self.ecs);
+                    }
                     renderer.update();
                     match renderer.render() {
                         Ok(_) => {}
