@@ -109,34 +109,41 @@ impl<'a, T: Component> Query<'a, T> {
     }
 }
 
+macro_rules! tuple_refs {
+    ($a:ident, $b:ident $(, $rest:ident)*) => {
+        (& $a, & $b $(, & $rest)*)
+    };
+}
+
 /// Implement Query for tuple component queries
 macro_rules! impl_query_iter_tuple {
-    ( $( $name:ident ),+ ) => {
-        impl<'a, $( $name: Component ),+ > Query<'a, ( $( $name ),+ )> {
-            pub fn iter(&self) -> impl Iterator<Item = (Entity, ( $( & $name ),+ ))> {
-                self.world.archetypes.iter().flat_map(|archetype| {
-                    // Get each Vec for the component type
-                    $( let $name = match archetype.components.get(&std::any::TypeId::of::<$name>()) {
+    ($a:ident, $b:ident) => {
+        impl<'a, $a: Component, $b: Component> Query<'a, ($a, $b)> {
+            pub fn iter(&self) -> Box<dyn Iterator<Item = (Entity, (&$a, &$b))> + '_> {
+                Box::new(self.world.archetypes.iter().flat_map(|archetype| {
+                    let $a = match archetype.components.get(&std::any::TypeId::of::<$a>()) {
                         Some(vec) => vec,
-                        None => return Vec::new().into_iter(),
-                    }; )+
-
-                    // All vecs should have the same length as archetype.entities
-                    (0..archetype.entities.len()).filter_map(move |i| {
+                        None => return Box::new(std::iter::empty()) as Box<dyn Iterator<Item = (Entity, (&$a, &$b))> + '_>,
+                    };
+                    let $b = match archetype.components.get(&std::any::TypeId::of::<$b>()) {
+                        Some(vec) => vec,
+                        None => return Box::new(std::iter::empty()) as Box<dyn Iterator<Item = (Entity, (&$a, &$b))> + '_>,
+                    };
+                    Box::new((0..archetype.entities.len()).filter_map(move |i| {
                         Some((
                             archetype.entities[i],
                             (
-                                $(
-                                    $name[i].as_any().downcast_ref::<$name>()?,
-                                )+
+                                $a[i].as_any().downcast_ref::<$a>()?,
+                                $b[i].as_any().downcast_ref::<$b>()?,
                             )
                         ))
-                    })
-                })
+                    })) as Box<dyn Iterator<Item = (Entity, (&$a, &$b))> + '_>
+                }))
             }
         }
     };
 }
+impl_query_iter_tuple!(T1, T2);
 
 // Implement SystemParam for queries, resources, etc.
 impl<T: Component> SystemParam for Query<'_, T> {
@@ -163,6 +170,10 @@ macro_rules! impl_system_param_for_query_tuple {
         }
     }
 }
+
+impl_system_param_for_query_tuple!(T1, T2);
+impl_system_param_for_query_tuple!(T1, T2, T3);
+impl_system_param_for_query_tuple!(T1, T2, T3, T4);
 
 #[macro_export]
 /// Spawn a new entity with the given components. 
@@ -229,6 +240,9 @@ mod tests {
     #[derive(Component)]
     struct Position(f32, f32);
 
+    #[derive(Component)]
+    struct Player;
+
     #[test]
     fn test_entity_creation() {
         let mut world = World::new();
@@ -248,4 +262,15 @@ mod tests {
         assert_eq!(results[0].0, entity);
         assert_eq!(results[1].0, entity2);
     }
+    #[test]
+    fn test_query_tuple() {
+        let mut world = World::new();
+        let entity = spawn!(world, Position(0.0, 0.0), Player);
+        let entity2 = spawn!(world, Position(1.0, 0.0));
+        let query = Query::<(Position, Player)> { world: &world, _marker: std::marker::PhantomData };
+        let results = query.iter().collect::<Vec<_>>();
+        assert_eq!(results[0].0, entity);
+        assert_eq!(results[0].0, entity);
+    }
+
 }
