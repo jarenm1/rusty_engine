@@ -1,10 +1,16 @@
 pub mod prelude;
 
-use std::{ptr::with_exposed_provenance, sync::Arc};
-use winit::{application::ApplicationHandler, event::ElementState, event_loop::EventLoop, keyboard::Key, window::{Window, WindowAttributes}};
+use jaren_ecs::system::World;
 use rendering::renderer::Renderer;
-use jaren_ecs::system::System;
+use std::{ptr::with_exposed_provenance, sync::Arc};
 use web_sys::console::log_1;
+use winit::{
+    application::ApplicationHandler,
+    event::ElementState,
+    event_loop::EventLoop,
+    keyboard::Key,
+    window::{Window, WindowAttributes},
+};
 
 #[derive(Default)]
 pub struct GameConfig {
@@ -45,8 +51,12 @@ impl App {
         event_loop.spawn_app(self);
 
         #[cfg(not(target_arch = "wasm32"))]
-        event_loop.run_app(&mut self).expect("Failed to run event loop");
+        event_loop
+            .run_app(&mut self)
+            .expect("Failed to run event loop");
     }
+
+    // rework this to use scheudler along with the proper ECS system.
     pub fn add_system<F>(mut self, mode: FunctionMode, func: F) -> Self
     where
         F: FnMut(&mut System) + 'static,
@@ -65,10 +75,10 @@ impl ApplicationHandler for App {
             let window = {
                 #[cfg(target_arch = "wasm32")]
                 {
-                    use winit::platform::web::WindowAttributesExtWebSys;
-                    use web_sys::{HtmlCanvasElement, window};
                     use wasm_bindgen::JsCast;
-                    
+                    use web_sys::{HtmlCanvasElement, window};
+                    use winit::platform::web::WindowAttributesExtWebSys;
+
                     let canvas = {
                         log_1(&"resumed: Getting window and document".into());
                         let window = window().expect("Failed to get window");
@@ -85,7 +95,7 @@ impl ApplicationHandler for App {
                             .map_err(|_| ())
                             .expect("Failed to cast element to HtmlCanvasElement");
                         log_1(&"resumed: Canvas element created".into());
-                        
+
                         canvas_element.set_id("game-canvas-created-by-rust");
 
                         // Append canvas to the document body
@@ -94,9 +104,9 @@ impl ApplicationHandler for App {
                             .expect("Failed to append canvas to body");
                         log_1(&"resumed: Canvas appended to body".into());
 
-                        canvas_element 
+                        canvas_element
                     };
-                    
+
                     log_1(&"resumed: Creating winit window with canvas".into());
                     let mut window_attrs = WindowAttributes::default();
                     window_attrs = window_attrs
@@ -108,8 +118,8 @@ impl ApplicationHandler for App {
                 }
                 #[cfg(not(target_arch = "wasm32"))]
                 {
-                    let window_attributes = WindowAttributes::default()
-                        .with_title(&self.config.title);
+                    let window_attributes =
+                        WindowAttributes::default().with_title(&self.config.title);
                     event_loop
                         .create_window(window_attributes)
                         .expect("failed to create window")
@@ -119,7 +129,10 @@ impl ApplicationHandler for App {
             let window_arc = Arc::new(window); // Create Arc<Window>
             self.window = Some(window_arc.clone()); // Store the Arc
 
-            self.renderer = Some(pollster::block_on(Renderer::new(window_arc.clone(), "25010123242900.jpeg")));
+            self.renderer = Some(pollster::block_on(Renderer::new(
+                window_arc.clone(),
+                "25010123242900.jpeg",
+            )));
 
             if let Some(renderer) = self.renderer.as_mut() {
                 renderer.resize(renderer.size()); // Call resize with initial size
@@ -132,21 +145,18 @@ impl ApplicationHandler for App {
             }
         }
         // Run all startup systems after ECS and renderer are ready
-        for system in &mut self.startup_systems {
-            (system)(&mut self.ecs);
-        }
+        // todo: startup systems with scheduler..??
     }
     fn window_event(
-            &mut self,
-            event_loop: &winit::event_loop::ActiveEventLoop,
-            window_id: winit::window::WindowId,
-            event: winit::event::WindowEvent,
+        &mut self,
+        event_loop: &winit::event_loop::ActiveEventLoop,
+        window_id: winit::window::WindowId,
+        event: winit::event::WindowEvent,
     ) {
         if self.window.as_ref().map_or(false, |w| w.id() == window_id) {
-
             let renderer = match self.renderer.as_mut() {
                 Some(r) => r,
-                None => return, 
+                None => return,
             };
 
             match event {
@@ -154,7 +164,7 @@ impl ApplicationHandler for App {
                     event_loop.exit();
                 }
                 winit::event::WindowEvent::Resized(physical_size) => {
-                     renderer.resize(physical_size);
+                    renderer.resize(physical_size);
                 }
                 winit::event::WindowEvent::RedrawRequested => {
                     // Run all update systems per frame
@@ -168,20 +178,18 @@ impl ApplicationHandler for App {
                         Err(wgpu::SurfaceError::OutOfMemory) => event_loop.exit(),
                         Err(e) => eprintln!("Error rendering frame: {:?}", e),
                     }
-                     if let Some(window) = self.window.as_ref() {
+                    if let Some(window) = self.window.as_ref() {
                         window.request_redraw();
-                     }
+                    }
                 }
-                winit::event::WindowEvent::KeyboardInput { event, .. } => { 
+                winit::event::WindowEvent::KeyboardInput { event, .. } => {
                     if let Key::Named(named_key) = event.logical_key {
                         match event.state {
-                            ElementState::Pressed => {
-                            }
-                            ElementState::Released => {
-                            }
+                            ElementState::Pressed => {}
+                            ElementState::Released => {}
                         }
                     }
-                },
+                }
                 _ => {}
             }
         }
