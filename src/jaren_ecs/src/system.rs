@@ -91,6 +91,11 @@ pub struct Query<'a, T> {
     _marker: std::marker::PhantomData<T>,
 }
 
+pub struct QueryMut<'a, T> {
+    world: &'a mut World,
+    _marker: std::marker::PhantomData<T>,
+}
+
 /// Implement Query for single component queries
 impl<'a, T: Component> Query<'a, T> {
     pub fn iter(&self) -> impl Iterator<Item = (Entity, &T)> {
@@ -109,13 +114,21 @@ impl<'a, T: Component> Query<'a, T> {
     }
 }
 
-macro_rules! tuple_refs {
-    ($a:ident, $b:ident $(, $rest:ident)*) => {
-        (& $a, & $b $(, & $rest)*)
-    };
+impl<'a, T: Component> QueryMut<'a, T> {
+    pub fn for_each_mut<F: FnMut(Entity, &mut T)>(&mut self, mut f: F) {
+        for archetype in self.world.archetypes.iter_mut() {
+            if let Some(vec) = archetype.components.get_mut(&std::any::TypeId::of::<T>()) {
+                for i in 0..archetype.entities.len() {
+                    if let Some(t_ref) = vec[i].as_any_mut().downcast_mut::<T>() {
+                        f(archetype.entities[i], t_ref);
+                    }
+                }
+            }
+        }
+    }
 }
 
-/// Implement Query for tuple component queries
+/// Implement Query for tuple component queries. Max size of 2.
 macro_rules! impl_query_iter_tuple {
     ($a:ident, $b:ident) => {
         impl<'a, $a: Component, $b: Component> Query<'a, ($a, $b)> {
@@ -237,7 +250,7 @@ mod tests {
 
     use super::*;
 
-    #[derive(Component)]
+    #[derive(Component, PartialEq, Debug, Clone, Copy)]
     struct Position(f32, f32);
 
     #[derive(Component)]
@@ -272,5 +285,57 @@ mod tests {
         assert_eq!(results[0].0, entity);
         assert_eq!(results[0].0, entity);
     }
+
+    #[test]
+    fn test_query_mut() {
+        let mut world = World::new();
+        let entity = spawn!(world, Position(0.0, 0.0));
+        let mut query = QueryMut::<Position> { world: &mut world, _marker: std::marker::PhantomData };
+        query.for_each_mut(|entity, mut position| {
+            position.0 += 1.0;
+            position.1 += 2.0;
+        });
+
+        let query = Query::<Position> { world: &world, _marker: std::marker::PhantomData };
+        let results = query.iter().collect::<Vec<_>>();
+        assert_eq!(results[0].1.0, 1.0);
+        assert_eq!(results[0].1.1, 2.0);
+    }
+
+#[test]
+fn test_query_mut_tuple() {
+    let mut world = World::new();
+    let entity_with_player = spawn!(world, Position(0.0, 0.0), Player);
+    let entity_without_player = spawn!(world, Position(1.0, 0.0));
+
+    // First, collect all entities that have both Position and Player
+    let query = Query::<(Position, Player)> { world: &world, _marker: std::marker::PhantomData };
+    let entities_with_player: Vec<_> = query.iter().map(|(e, _)| e).collect();
+
+    // Mutably update only those positions
+    {
+        let mut mut_query = QueryMut::<Position> { world: &mut world, _marker: std::marker::PhantomData };
+        mut_query.for_each_mut(|entity, pos| {
+            if entities_with_player.contains(&entity) {
+                pos.0 += 10.0;
+                pos.1 += 20.0;
+            }
+        });
+    }
+
+    // Check results
+    let query = Query::<Position> { world: &world, _marker: std::marker::PhantomData };
+    let results: Vec<_> = query.iter().collect();
+
+    // Find the modified and unmodified entities
+    let (pos_with_player, pos_without_player) = if results[0].0 == entity_with_player {
+        (results[0].1, results[1].1)
+    } else {
+        (results[1].1, results[0].1)
+    };
+
+    assert_eq!(*pos_with_player, Position(10.0, 20.0));
+    assert_eq!(*pos_without_player, Position(1.0, 0.0));
+}
 
 }
